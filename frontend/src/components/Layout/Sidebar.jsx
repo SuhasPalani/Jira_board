@@ -1,13 +1,11 @@
-// Placeholder for Sidebar component
 // frontend/src/components/Layout/Sidebar.jsx
 import React, { useState } from 'react';
 import { useBoard } from '../../contexts/BoardContext';
 import FriendList from '../Friends/FriendList';
 import './Sidebar.css';
 
-const Sidebar = () => {
+const Sidebar = ({ expanded = true, setExpanded }) => {
   const { boards, currentBoard, loadBoard, createBoard } = useBoard();
-  const [isExpanded, setIsExpanded] = useState(true);
   const [activeSection, setActiveSection] = useState('boards');
   const [showNewBoard, setShowNewBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
@@ -32,17 +30,13 @@ const Sidebar = () => {
     }
   };
 
-  const toggleSidebar = () => {
-    setIsExpanded(!isExpanded);
-  };
-
   return (
     <>
-      <aside className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}>
+      <aside className={`sidebar ${expanded ? 'expanded' : 'collapsed'}`}>
         <button 
           className="sidebar-toggle"
-          onClick={toggleSidebar}
-          title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+          onClick={() => setExpanded(!expanded)}
+          title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           <svg 
             width="20" 
@@ -51,7 +45,7 @@ const Sidebar = () => {
             fill="none" 
             stroke="currentColor"
             style={{ 
-              transform: isExpanded ? 'rotate(0deg)' : 'rotate(180deg)',
+              transform: expanded ? 'rotate(0deg)' : 'rotate(180deg)',
               transition: 'transform 0.3s'
             }}
           >
@@ -59,7 +53,7 @@ const Sidebar = () => {
           </svg>
         </button>
 
-        {isExpanded && (
+        {expanded && (
           <div className="sidebar-content">
             {/* Navigation Tabs */}
             <div className="sidebar-tabs">
@@ -172,7 +166,51 @@ const Sidebar = () => {
             )}
           </div>
         )}
+
+        {/* Collapsed State Icons */}
+        {!expanded && (
+          <div className="sidebar-collapsed-icons">
+            <button 
+              className={`sidebar-icon-button ${activeSection === 'boards' ? 'active' : ''}`}
+              onClick={() => {
+                setExpanded(true);
+                setActiveSection('boards');
+              }}
+              title="Boards"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </button>
+            <button 
+              className={`sidebar-icon-button ${activeSection === 'friends' ? 'active' : ''}`}
+              onClick={() => {
+                setExpanded(true);
+                setActiveSection('friends');
+              }}
+              title="Friends"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="7" r="4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        )}
       </aside>
+
+      {/* Mobile Overlay */}
+      {expanded && (
+        <div 
+          className="sidebar-overlay"
+          onClick={() => setExpanded(false)}
+        />
+      )}
 
       {/* New Board Modal */}
       {showNewBoard && (

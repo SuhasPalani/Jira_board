@@ -1,10 +1,9 @@
-// Placeholder for boards routes
-// backend/src/routes/boards.js
+// backend/src/routes/boards.js 
 const express = require('express');
 const Board = require('../models/Board');
 const Column = require('../models/Column');
 const Task = require('../models/Task');
-const { protect } = require('../middleware/auth');
+const { protect, requireBoardMember, requireBoardEditor, requireBoardAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -17,7 +16,10 @@ router.post('/', protect, async (req, res) => {
       name,
       description,
       owner: req.user._id,
-      members: [req.user._id]
+      members: [{
+        user: req.user._id,
+        role: 'admin'
+      }]
     });
 
     // Create default columns
@@ -37,7 +39,7 @@ router.post('/', protect, async (req, res) => {
 
     const populatedBoard = await Board.findById(board._id)
       .populate('columns')
-      .populate('members', 'username email');
+      .populate('members.user', 'username email avatar');
 
     res.status(201).json({ board: populatedBoard });
   } catch (error) {
@@ -49,10 +51,10 @@ router.post('/', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
   try {
     const boards = await Board.find({
-      members: req.user._id
+      'members.user': req.user._id
     })
     .populate('owner', 'username email')
-    .populate('members', 'username email')
+    .populate('members.user', 'username email avatar')
     .sort('-updatedAt');
 
     res.json({ boards });
@@ -62,20 +64,12 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Get single board with all data
-router.get('/:boardId', protect, async (req, res) => {
+router.get('/:boardId', protect, requireBoardMember, async (req, res) => {
   try {
     const board = await Board.findById(req.params.boardId)
       .populate('columns')
-      .populate('members', 'username email avatar')
+      .populate('members.user', 'username email avatar')
       .populate('owner', 'username email');
-
-    if (!board) {
-      return res.status(404).json({ error: 'Board not found' });
-    }
-
-    if (!board.members.some(m => m._id.toString() === req.user._id.toString())) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     // Get all tasks for this board
     const tasks = await Task.find({ board: board._id })
@@ -83,30 +77,36 @@ router.get('/:boardId', protect, async (req, res) => {
       .populate('creator', 'username email')
       .sort('order');
 
-    res.json({ board, tasks });
+    // Include user's role in response
+    const userRole = board.getUserRole(req.user._id);
+
+    res.json({ 
+      board, 
+      tasks,
+      userRole,
+      permissions: {
+        canEdit: board.canUserEdit(req.user._id),
+        canAdmin: board.canUserAdmin(req.user._id)
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Update board
-router.put('/:boardId', protect, async (req, res) => {
+// Update board - requires editor role
+router.put('/:boardId', protect, requireBoardMember, requireBoardEditor, async (req, res) => {
   try {
-    const board = await Board.findById(req.params.boardId);
-
-    if (!board) {
-      return res.status(404).json({ error: 'Board not found' });
-    }
-
-    if (board.owner.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Only board owner can update' });
-    }
-
+    const board = req.board;
     const { name, description } = req.body;
+    
     if (name) board.name = name;
     if (description !== undefined) board.description = description;
 
     await board.save();
+
+    const io = req.app.get('io');
+    io.to(board._id.toString()).emit('boardUpdated', board);
 
     res.json({ board });
   } catch (error) {
@@ -114,18 +114,18 @@ router.put('/:boardId', protect, async (req, res) => {
   }
 });
 
-// Add column
-router.post('/:boardId/columns', protect, async (req, res) => {
+// Add column - requires editor role
+router.post('/:boardId/columns', protect, requireBoardMember, requireBoardEditor, async (req, res) => {
   try {
-    const board = await Board.findById(req.params.boardId);
+    const board = req.board;
+    const { name } = req.body;
 
-    if (!board || !board.members.includes(req.user._id)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Column name is required' });
     }
 
-    const { name } = req.body;
     const column = await Column.create({
-      name,
+      name: name.trim(),
       board: board._id,
       order: board.columns.length
     });
@@ -134,7 +134,7 @@ router.post('/:boardId/columns', protect, async (req, res) => {
     await board.save();
 
     const io = req.app.get('io');
-    io.to(req.params.boardId).emit('columnAdded', column);
+    io.to(board._id.toString()).emit('columnAdded', column);
 
     res.status(201).json({ column });
   } catch (error) {
@@ -142,17 +142,20 @@ router.post('/:boardId/columns', protect, async (req, res) => {
   }
 });
 
-// Update column
-router.put('/:boardId/columns/:columnId', protect, async (req, res) => {
+// Update column - requires editor role
+router.put('/:boardId/columns/:columnId', protect, requireBoardMember, requireBoardEditor, async (req, res) => {
   try {
-    const column = await Column.findById(req.params.columnId);
+    const column = await Column.findOne({
+      _id: req.params.columnId,
+      board: req.params.boardId
+    });
 
     if (!column) {
       return res.status(404).json({ error: 'Column not found' });
     }
 
     const { name, order } = req.body;
-    if (name) column.name = name;
+    if (name) column.name = name.trim();
     if (order !== undefined) column.order = order;
 
     await column.save();
@@ -166,13 +169,57 @@ router.put('/:boardId/columns/:columnId', protect, async (req, res) => {
   }
 });
 
-// Delete column
-router.delete('/:boardId/columns/:columnId', protect, async (req, res) => {
+// Reorder columns - requires editor role
+router.patch('/:boardId/columns/reorder', protect, requireBoardMember, requireBoardEditor, async (req, res) => {
   try {
-    const column = await Column.findById(req.params.columnId);
+    const { columnOrder } = req.body; // Array of column IDs in new order
+
+    if (!Array.isArray(columnOrder)) {
+      return res.status(400).json({ error: 'columnOrder must be an array' });
+    }
+
+    const board = req.board;
+
+    // Update order for each column
+    const updatePromises = columnOrder.map((columnId, index) => 
+      Column.findByIdAndUpdate(columnId, { order: index })
+    );
+
+    await Promise.all(updatePromises);
+
+    // Update board's column array order
+    board.columns = columnOrder;
+    await board.save();
+
+    const io = req.app.get('io');
+    io.to(board._id.toString()).emit('columnsReordered', { columnOrder });
+
+    res.json({ success: true, columnOrder });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete column - requires editor role
+router.delete('/:boardId/columns/:columnId', protect, requireBoardMember, requireBoardEditor, async (req, res) => {
+  try {
+    const column = await Column.findOne({
+      _id: req.params.columnId,
+      board: req.params.boardId
+    });
 
     if (!column) {
       return res.status(404).json({ error: 'Column not found' });
+    }
+
+    const taskCount = await Task.countDocuments({ column: column._id });
+
+    if (taskCount > 0 && !req.body.confirm) {
+      return res.status(400).json({ 
+        error: 'Column contains tasks',
+        requiresConfirmation: true,
+        taskCount
+      });
     }
 
     // Delete all tasks in column
@@ -189,6 +236,29 @@ router.delete('/:boardId/columns/:columnId', protect, async (req, res) => {
     io.to(req.params.boardId).emit('columnDeleted', { columnId: column._id });
 
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete board - requires admin role
+router.delete('/:boardId', protect, requireBoardMember, requireBoardAdmin, async (req, res) => {
+  try {
+    const board = req.board;
+
+    // Delete all tasks
+    await Task.deleteMany({ board: board._id });
+
+    // Delete all columns
+    await Column.deleteMany({ board: board._id });
+
+    // Delete board
+    await board.deleteOne();
+
+    const io = req.app.get('io');
+    io.to(board._id.toString()).emit('boardDeleted', { boardId: board._id });
+
+    res.json({ success: true, message: 'Board deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

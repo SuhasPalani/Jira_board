@@ -1,5 +1,4 @@
-// Placeholder for ai routes
-// backend/src/routes/ai.js
+// backend/src/routes/ai.js 
 const express = require('express');
 const multer = require('multer');
 const { protect } = require('../middleware/auth');
@@ -7,11 +6,10 @@ const { createTaskFromText, transcribeAudio, improveTaskDescription, generateSub
 
 const router = express.Router();
 
-// Configure multer for audio uploads
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'audio/m4a'];
     if (allowedTypes.includes(file.mimetype) || file.mimetype.startsWith('audio/')) {
@@ -22,7 +20,7 @@ const upload = multer({
   }
 });
 
-// Create task from natural language
+// Create task from natural language - RETURNS TASK DATA ONLY FOR PREVIEW
 router.post('/create-task', protect, async (req, res) => {
   try {
     const { text, boardId } = req.body;
@@ -31,6 +29,7 @@ router.post('/create-task', protect, async (req, res) => {
       return res.status(400).json({ error: 'Text and boardId are required' });
     }
 
+    // This returns structured task data, NOT creating the task yet
     const taskData = await createTaskFromText(text, boardId);
 
     res.json({ taskData });
@@ -40,7 +39,7 @@ router.post('/create-task', protect, async (req, res) => {
   }
 });
 
-// Transcribe audio and create task
+// Transcribe audio - RETURNS TRANSCRIPTION + TASK DATA FOR PREVIEW
 router.post('/transcribe', protect, upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
@@ -49,10 +48,7 @@ router.post('/transcribe', protect, upload.single('audio'), async (req, res) => 
 
     const { boardId } = req.body;
 
-    // Transcribe audio
     const transcription = await transcribeAudio(req.file.buffer, req.file.mimetype);
-
-    // Create task from transcription
     const taskData = await createTaskFromText(transcription, boardId);
 
     res.json({
@@ -65,7 +61,6 @@ router.post('/transcribe', protect, upload.single('audio'), async (req, res) => 
   }
 });
 
-// Improve task description
 router.post('/improve-description', protect, async (req, res) => {
   try {
     const { description, title } = req.body;
@@ -83,7 +78,6 @@ router.post('/improve-description', protect, async (req, res) => {
   }
 });
 
-// Generate subtasks
 router.post('/generate-subtasks', protect, async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -101,7 +95,6 @@ router.post('/generate-subtasks', protect, async (req, res) => {
   }
 });
 
-// Chat with AI assistant
 router.post('/chat', protect, async (req, res) => {
   try {
     const { message, context } = req.body;

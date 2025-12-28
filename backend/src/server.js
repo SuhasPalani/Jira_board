@@ -13,6 +13,10 @@ const userRoutes = require('./routes/users');
 const boardRoutes = require('./routes/boards');
 const taskRoutes = require('./routes/tasks');
 const aiRoutes = require('./routes/ai');
+// backend/src/server.js
+const boardInvitationsRoutes = require('./routes/boardInvitations');
+
+// Add after existing routes
 
 const app = express();
 const server = http.createServer(app);
@@ -43,7 +47,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/ai', aiRoutes);
-
+app.use('/api/boards', boardInvitationsRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });

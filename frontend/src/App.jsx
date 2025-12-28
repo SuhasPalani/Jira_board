@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/authContext';
 import { BoardProvider } from './contexts/BoardContext';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
@@ -16,6 +16,8 @@ function ProtectedRoute({ children }) {
 }
 
 function App() {
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+
   return (
     <AuthProvider>
       <Router>
@@ -29,13 +31,12 @@ function App() {
                 <ProtectedRoute>
                   <BoardProvider>
                     <Navbar />
-                    <div style={{ display: 'flex' }}>
-                      <Sidebar />
-                      <main style={{ 
-                        marginLeft: '280px', 
-                        flex: 1,
-                        transition: 'margin-left 0.3s ease'
-                      }}>
+                    <div style={{ display: 'flex', position: 'relative' }}>
+                      <Sidebar 
+                        expanded={sidebarExpanded} 
+                        setExpanded={setSidebarExpanded} 
+                      />
+                      <main className={`main-content ${!sidebarExpanded ? 'sidebar-collapsed' : ''}`}>
                         <Routes>
                           <Route path="/" element={<Board />} />
                           <Route path="/board/:boardId" element={<Board />} />

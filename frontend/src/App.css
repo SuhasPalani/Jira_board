@@ -315,3 +315,25 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ADD TO THE END OF frontend/src/App.css */
+
+.main-content {
+  margin-left: 280px;
+  min-height: calc(100vh - 64px);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex: 1;
+  will-change: margin-left;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 60px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .main-content,
+  .main-content.sidebar-collapsed {
+    margin-left: 0;
+  }
+}
